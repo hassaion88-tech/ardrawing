@@ -1,3 +1,4 @@
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -14,4 +15,12 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+}
+
+dependencies {
+    val cameraXVersion = "1.4.2"
+
+    implementation("androidx.camera:camera-camera2:$cameraXVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraXVersion")
+    implementation("androidx.camera:camera-view:$cameraXVersion")
 }
