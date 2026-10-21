@@ -1,9 +1,8 @@
-
 package com.arsketchstudio
 
 import android.Manifest
-import android.app.Activity
 import android.content.pm.PackageManager
+import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
@@ -15,6 +14,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
@@ -22,13 +22,11 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
 
     private lateinit var previewView: PreviewView
     private lateinit var drawingImage: ImageView
     private lateinit var statusText: TextView
-    private lateinit var opacityBar: SeekBar
-    private lateinit var zoomBar: SeekBar
 
     private var cameraProvider: ProcessCameraProvider? = null
     private var imageScale = 1f
@@ -56,8 +54,8 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestedOrientation =
-            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
         window.statusBarColor = Color.BLACK
         window.navigationBarColor = Color.BLACK
@@ -65,7 +63,8 @@ class MainActivity : Activity() {
         buildScreen()
 
         if (ContextCompat.checkSelfPermission(
-                this, Manifest.permission.CAMERA
+                this,
+                Manifest.permission.CAMERA
             ) == PackageManager.PERMISSION_GRANTED
         ) {
             startCamera()
@@ -91,7 +90,8 @@ class MainActivity : Activity() {
         val cameraFrame = FrameLayout(this)
 
         previewView = PreviewView(this).apply {
-            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            implementationMode =
+                PreviewView.ImplementationMode.COMPATIBLE
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
 
@@ -148,26 +148,38 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
 
-        opacityBar = SeekBar(this).apply {
+        val opacityBar = SeekBar(this).apply {
             max = 100
             progress = 50
-            setOnSeekBarChangeListener(object :
-                SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(
-                    seekBar: SeekBar?, progress: Int, fromUser: Boolean
-                ) {
-                    drawingImage.alpha = progress / 100f
-                }
 
-                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-            })
+            setOnSeekBarChangeListener(
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(
+                        seekBar: SeekBar?,
+                        progress: Int,
+                        fromUser: Boolean
+                    ) {
+                        drawingImage.alpha = progress / 100f
+                    }
+
+                    override fun onStartTrackingTouch(
+                        seekBar: SeekBar?
+                    ) {}
+
+                    override fun onStopTrackingTouch(
+                        seekBar: SeekBar?
+                    ) {}
+                }
+            )
         }
 
         opacityControls.addView(opacityLabel)
         opacityControls.addView(
             opacityBar,
-            LinearLayout.LayoutParams(180, ViewGroup.LayoutParams.WRAP_CONTENT)
+            LinearLayout.LayoutParams(
+                180,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         )
 
         val zoomControls = LinearLayout(this).apply {
@@ -180,27 +192,39 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
 
-        zoomBar = SeekBar(this).apply {
+        val zoomBar = SeekBar(this).apply {
             max = 150
             progress = 50
-            setOnSeekBarChangeListener(object :
-                SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(
-                    seekBar: SeekBar?, progress: Int, fromUser: Boolean
-                ) {
-                    imageScale = 0.5f + progress / 100f
-                    updateImage()
-                }
 
-                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-            })
+            setOnSeekBarChangeListener(
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(
+                        seekBar: SeekBar?,
+                        progress: Int,
+                        fromUser: Boolean
+                    ) {
+                        imageScale = 0.5f + progress / 100f
+                        updateImage()
+                    }
+
+                    override fun onStartTrackingTouch(
+                        seekBar: SeekBar?
+                    ) {}
+
+                    override fun onStopTrackingTouch(
+                        seekBar: SeekBar?
+                    ) {}
+                }
+            )
         }
 
         zoomControls.addView(zoomLabel)
         zoomControls.addView(
             zoomBar,
-            LinearLayout.LayoutParams(180, ViewGroup.LayoutParams.WRAP_CONTENT)
+            LinearLayout.LayoutParams(
+                180,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         )
 
         controls.addView(chooseButton)
@@ -208,6 +232,7 @@ class MainActivity : Activity() {
         controls.addView(zoomControls)
 
         root.addView(title)
+
         root.addView(
             cameraFrame,
             LinearLayout.LayoutParams(
@@ -216,6 +241,7 @@ class MainActivity : Activity() {
                 1f
             )
         )
+
         root.addView(statusText)
         root.addView(controls)
 
@@ -237,14 +263,20 @@ class MainActivity : Activity() {
                 val provider = future.get()
                 cameraProvider = provider
 
-                val preview = Preview.Builder().build().also {
-                    it.surfaceProvider = previewView.surfaceProvider
-                }
+                val preview = Preview.Builder()
+                    .build()
+
+                preview.surfaceProvider =
+                    previewView.surfaceProvider
 
                 provider.unbindAll()
+
+                val cameraSelector =
+                    CameraSelector.DEFAULT_BACK_CAMERA
+
                 provider.bindToLifecycle(
                     this,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    cameraSelector,
                     preview
                 )
 
@@ -252,7 +284,8 @@ class MainActivity : Activity() {
                     "الكاميرا تعمل. اختار صورة حتى تبدأ التتبع."
 
             } catch (e: Exception) {
-                statusText.text = "تعذر تشغيل الكاميرا."
+                statusText.text =
+                    "تعذر تشغيل الكاميرا: ${e.message ?: "خطأ غير معروف"}"
             }
         }, ContextCompat.getMainExecutor(this))
     }
