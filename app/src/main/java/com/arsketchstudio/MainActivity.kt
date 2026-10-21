@@ -1,11 +1,12 @@
 
 package com.arsketchstudio
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.graphics.Color
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -13,6 +14,7 @@ import android.widget.TextView
 class MainActivity : Activity() {
 
     private lateinit var statusText: TextView
+    private val cameraRequestCode = 100
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,7 +45,7 @@ class MainActivity : Activity() {
         }
 
         statusText = TextView(this).apply {
-            text = "أهلاً بيك! جهّز موبايلك فوق الورقة."
+            text = "اضغط الزر للسماح باستخدام الكاميرا."
             textSize = 16f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -51,11 +53,10 @@ class MainActivity : Activity() {
         }
 
         val startButton = Button(this).apply {
-            text = "بدء الرسم بالكاميرا"
+            text = "السماح وتشغيل الكاميرا"
             textSize = 18f
             setOnClickListener {
-                statusText.text =
-                    "الخطوة الجاية راح نفعّل الكاميرا ونعرض الصورة للتتبع."
+                requestCameraPermission()
             }
         }
 
@@ -71,5 +72,37 @@ class MainActivity : Activity() {
         )
 
         setContentView(root)
+    }
+
+    private fun requestCameraPermission() {
+        if (checkSelfPermission(Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            statusText.text = "إذن الكاميرا متوفر. راح نفعّل عرضها بالخطوة الجاية."
+        } else {
+            requestPermissions(
+                arrayOf(Manifest.permission.CAMERA),
+                cameraRequestCode
+            )
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        if (requestCode == cameraRequestCode) {
+            statusText.text = if (
+                grantResults.isNotEmpty() &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED
+            ) {
+                "تم السماح بالكاميرا! جاهزين للخطوة الجاية."
+            } else {
+                "إذن الكاميرا مرفوض. اسمح بيه حتى نكمل."
+            }
+        }
     }
 }
