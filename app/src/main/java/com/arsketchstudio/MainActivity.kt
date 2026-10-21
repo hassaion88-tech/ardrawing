@@ -3,12 +3,9 @@ package com.arsketchstudio
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.content.Intent
+import android.content.ContentValues
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
@@ -28,6 +25,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import kotlin.math.sqrt
 
 class MainActivity : ComponentActivity() {
 
@@ -40,6 +38,7 @@ class MainActivity : ComponentActivity() {
 
     private var provider: ProcessCameraProvider? = null
     private var selectedBitmap: Bitmap? = null
+    private var outlineBitmap: Bitmap? = null
     private var showingOutline = false
     private var opacity = 0.5f
     private var imageScale = 1f
@@ -50,14 +49,24 @@ class MainActivity : ComponentActivity() {
     ) { uri: Uri? ->
         if (uri != null) {
             try {
-                contentResolver.openInputStream(uri)?.use { stream ->
-                    selectedBitmap = android.graphics.BitmapFactory
-                        .decodeStream(stream)
+                val bitmap = contentResolver.openInputStream(uri)?.use {
+                    android.graphics.BitmapFactory.decodeStream(it)
                 }
-                showingOutline = false
-                showCurrentTab()
+
+                if (bitmap != null) {
+                    selectedBitmap = bitmap
+                    outlineBitmap = null
+                    showingOutline = false
+                    showCurrentTab()
+                } else {
+                    Toast.makeText(
+                        this, "تعذر قراءة الصورة", Toast.LENGTH_SHORT
+                    ).show()
+                }
             } catch (_: Exception) {
-                Toast.makeText(this, "تعذر فتح الصورة", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    this, "تعذر فتح الصورة", Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }
@@ -71,17 +80,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         requestedOrientation =
             android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+
         window.statusBarColor = Color.rgb(24, 26, 32)
         window.navigationBarColor = Color.rgb(24, 26, 32)
+
         buildScreen()
 
         if (ContextCompat.checkSelfPermission(
                 this, Manifest.permission.CAMERA
             ) == PackageManager.PERMISSION_GRANTED
-        ) startCamera()
-        else permission.launch(Manifest.permission.CAMERA)
+        ) {
+            startCamera()
+        } else {
+            permission.launch(Manifest.permission.CAMERA)
+        }
     }
 
     private fun buildScreen() {
@@ -126,21 +141,6 @@ class MainActivity : ComponentActivity() {
             visibility = View.GONE
         }
 
-        content.addView(
-            preview,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
-        content.addView(
-            image,
-            FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        )
-
         status = TextView(this).apply {
             text = "اختَر صورة حتى تبدأ"
             textSize = 14f
@@ -158,6 +158,7 @@ class MainActivity : ComponentActivity() {
             )
         )
         root.addView(status)
+
         setContentView(root)
         showCurrentTab()
     }
@@ -185,10 +186,13 @@ class MainActivity : ComponentActivity() {
             if (selectedBitmap != null) View.VISIBLE else View.GONE
 
         selectedBitmap?.let { bitmap ->
-            image.setImageBitmap(bitmap)
+            image.setImageBitmap(
+                if (showingOutline) getOutline(bitmap) else bitmap
+            )
             image.alpha = opacity
             image.scaleX = imageScale
             image.scaleY = imageScale
+
             content.addView(
                 image,
                 FrameLayout.LayoutParams(
@@ -204,43 +208,55 @@ class MainActivity : ComponentActivity() {
             setBackgroundColor(0x99000000.toInt())
         }
 
-        val choose = Button(this).apply {
+        controls.addView(Button(this).apply {
             text = "اختيار صورة"
             setOnClickListener { picker.launch("image/*") }
-        }
+        })
 
         val alpha = SeekBar(this).apply {
             max = 100
             progress = (opacity * 100).toInt()
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(
-                    seekBar: SeekBar?, progress: Int, fromUser: Boolean
-                ) {
-                    opacity = progress / 100f
-                    image.alpha = opacity
+
+            setOnSeekBarChangeListener(
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(
+                        seekBar: SeekBar?,
+                        progress: Int,
+                        fromUser: Boolean
+                    ) {
+                        opacity = progress / 100f
+                        image.alpha = opacity
+                    }
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
                 }
-                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-            })
+            )
         }
 
         val zoom = SeekBar(this).apply {
             max = 150
-            progress = ((imageScale - 0.5f) * 100).toInt().coerceIn(0, 150)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(
-                    seekBar: SeekBar?, progress: Int, fromUser: Boolean
-                ) {
-                    imageScale = 0.5f + progress / 100f
-                    image.scaleX = imageScale
-                    image.scaleY = imageScale
+            progress = ((imageScale - 0.5f) * 100)
+                .toInt().coerceIn(0, 150)
+
+            setOnSeekBarChangeListener(
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(
+                        seekBar: SeekBar?,
+                        progress: Int,
+                        fromUser: Boolean
+                    ) {
+                        imageScale = 0.5f + progress / 100f
+                        image.scaleX = imageScale
+                        image.scaleY = imageScale
+                    }
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
                 }
-                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-            })
+            )
         }
 
-        controls.addView(choose)
         controls.addView(alpha, LinearLayout.LayoutParams(150, 48))
         controls.addView(zoom, LinearLayout.LayoutParams(150, 48))
 
@@ -252,6 +268,7 @@ class MainActivity : ComponentActivity() {
                 Gravity.BOTTOM
             )
         )
+
         status.text = "التتبع: اختَر صورة واضبط شفافيتها وحجمها"
     }
 
@@ -259,7 +276,7 @@ class MainActivity : ComponentActivity() {
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(12, 12, 12, 12)
+            setPadding(12, 8, 12, 8)
         }
 
         val planImage = ImageView(this).apply {
@@ -267,9 +284,9 @@ class MainActivity : ComponentActivity() {
             setBackgroundColor(Color.rgb(35, 37, 44))
         }
 
-        selectedBitmap?.let {
+        selectedBitmap?.let { bitmap ->
             planImage.setImageBitmap(
-                if (showingOutline) makeOutline(it) else it
+                if (showingOutline) getOutline(bitmap) else bitmap
             )
         }
 
@@ -291,6 +308,7 @@ class MainActivity : ComponentActivity() {
 
         buttons.addView(Button(this).apply {
             text = if (showingOutline) "الصورة الأصلية" else "تحويل إلى خطوط"
+
             setOnClickListener {
                 if (selectedBitmap == null) {
                     picker.launch("image/*")
@@ -303,21 +321,27 @@ class MainActivity : ComponentActivity() {
 
         buttons.addView(Button(this).apply {
             text = "حفظ التخطيط"
+
             setOnClickListener {
                 val bitmap = selectedBitmap
+
                 if (bitmap == null) {
                     Toast.makeText(
-                        this@MainActivity, "اختَر صورة أولاً",
+                        this@MainActivity,
+                        "اختَر صورة أولاً",
                         Toast.LENGTH_SHORT
                     ).show()
                 } else {
-                    saveBitmap(if (showingOutline) makeOutline(bitmap) else bitmap)
+                    saveBitmap(
+                        if (showingOutline) getOutline(bitmap) else bitmap
+                    )
                 }
             }
         })
 
         column.addView(buttons)
         content.addView(column)
+
         status.text = "التخطيط: حوّل الصورة إلى خطوط أو احفظها"
     }
 
@@ -330,6 +354,7 @@ class MainActivity : ComponentActivity() {
         val photo = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
+
         selectedBitmap?.let { photo.setImageBitmap(it) }
 
         column.addView(
@@ -338,10 +363,12 @@ class MainActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
             )
         )
+
         column.addView(Button(this).apply {
             text = "اختيار صورة من الهاتف"
             setOnClickListener { picker.launch("image/*") }
         })
+
         column.addView(Button(this).apply {
             text = "حفظ الصورة"
             setOnClickListener {
@@ -354,47 +381,126 @@ class MainActivity : ComponentActivity() {
         status.text = "صوري: اختر صورة أو احفظ الصورة الحالية"
     }
 
-    private fun makeOutline(source: Bitmap): Bitmap {
-        val width = source.width.coerceAtMost(1200)
-        val height = (source.height.toFloat() * width / source.width)
-            .toInt().coerceAtLeast(1)
-        val small = Bitmap.createScaledBitmap(source, width, height, true)
-        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    // تحويل الصورة إلى خطوط باستخدام اكتشاف الحواف Sobel
+    private fun getOutline(source: Bitmap): Bitmap {
+        outlineBitmap?.let { return it }
+
+        val maxDimension = 1200f
+        val scale = minOf(
+            1f,
+            maxDimension / source.width,
+            maxDimension / source.height
+        )
+
+        val width = (source.width * scale).toInt().coerceAtLeast(3)
+        val height = (source.height * scale).toInt().coerceAtLeast(3)
+
+        val small = Bitmap.createScaledBitmap(
+            source, width, height, true
+        )
+
+        val count = width * height
+        val gray = IntArray(count)
 
         for (y in 0 until height) {
             for (x in 0 until width) {
-                val center = Color.red(small.getPixel(x, y)) +
-                    Color.green(small.getPixel(x, y)) +
-                    Color.blue(small.getPixel(x, y))
+                val color = small.getPixel(x, y)
 
-                val right = if (x + 1 < width) {
-                    val c = small.getPixel(x + 1, y)
-                    Color.red(c) + Color.green(c) + Color.blue(c)
-                } else center
+                val r = Color.red(color)
+                val g = Color.green(color)
+                val b = Color.blue(color)
 
-                val down = if (y + 1 < height) {
-                    val c = small.getPixel(x, y + 1)
-                    Color.red(c) + Color.green(c) + Color.blue(c)
-                } else center
-
-                val edge = kotlin.math.abs(center - right) +
-                    kotlin.math.abs(center - down)
-
-                val value = if (edge > 100) 25 else 255
-                result.setPixel(x, y, Color.rgb(value, value, value))
+                gray[y * width + x] =
+                    (299 * r + 587 * g + 114 * b) / 1000
             }
         }
+
+        val edges = IntArray(count)
+        var maxEdge = 0
+
+        for (y in 1 until height - 1) {
+            for (x in 1 until width - 1) {
+                val i = y * width + x
+
+                val gx =
+                    -gray[i - width - 1] +
+                    gray[i - width + 1] -
+                    2 * gray[i - 1] +
+                    2 * gray[i + 1] -
+                    gray[i + width - 1] +
+                    gray[i + width + 1]
+
+                val gy =
+                    -gray[i - width - 1] -
+                    2 * gray[i - width] -
+                    gray[i - width + 1] +
+                    gray[i + width - 1] +
+                    2 * gray[i + width] +
+                    gray[i + width + 1]
+
+                val strength = sqrt(
+                    (gx.toDouble() * gx + gy.toDouble() * gy)
+                ).toInt()
+
+                edges[i] = strength
+                if (strength > maxEdge) maxEdge = strength
+            }
+        }
+
+        // حد أدنى للتفاصيل، مع مراعاة تباين الصورة
+        val threshold = maxOf(65, (maxEdge * 0.10f).toInt())
+
+        val pixels = IntArray(count) { Color.WHITE }
+
+        for (y in 1 until height - 1) {
+            for (x in 1 until width - 1) {
+                val i = y * width + x
+                val strength = edges[i]
+
+                if (strength >= threshold) {
+                    // خطوط داكنة وواضحة على خلفية بيضاء
+                    val darkness = (
+                        35 - ((strength - threshold) / 12)
+                    ).coerceIn(0, 35)
+
+                    pixels[i] = Color.rgb(
+                        darkness, darkness, darkness
+                    )
+                } else {
+                    pixels[i] = Color.WHITE
+                }
+            }
+        }
+
+        val result = Bitmap.createBitmap(
+            width, height, Bitmap.Config.ARGB_8888
+        )
+
+        result.setPixels(
+            pixels, 0, width, 0, 0, width, height
+        )
+
+        if (small !== source) small.recycle()
+
+        outlineBitmap = result
         return result
     }
 
     private fun saveBitmap(bitmap: Bitmap) {
         try {
-            val values = android.content.ContentValues().apply {
-                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,
-                    "ARSketch_${System.currentTimeMillis()}.png")
-                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
-                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
-                    "Pictures/AR Sketch Studio")
+            val values = ContentValues().apply {
+                put(
+                    android.provider.MediaStore.Images.Media.DISPLAY_NAME,
+                    "ARSketch_${System.currentTimeMillis()}.png"
+                )
+                put(
+                    android.provider.MediaStore.Images.Media.MIME_TYPE,
+                    "image/png"
+                )
+                put(
+                    android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                    "Pictures/AR Sketch Studio"
+                )
             }
 
             val uri = contentResolver.insert(
@@ -403,18 +509,30 @@ class MainActivity : ComponentActivity() {
             )
 
             if (uri != null) {
-                contentResolver.openOutputStream(uri)?.use {
+                val saved = contentResolver.openOutputStream(uri)?.use {
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                } ?: false
+
+                if (saved) {
+                    Toast.makeText(
+                        this, "تم الحفظ بالصور", Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        this, "تعذر حفظ الصورة", Toast.LENGTH_SHORT
+                    ).show()
                 }
-                Toast.makeText(this, "تم الحفظ بالصور", Toast.LENGTH_SHORT).show()
             }
         } catch (_: Exception) {
-            Toast.makeText(this, "تعذر حفظ الصورة", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                this, "تعذر حفظ الصورة", Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
     private fun startCamera() {
         val future = ProcessCameraProvider.getInstance(this)
+
         future.addListener({
             try {
                 val cameraProvider = future.get()
@@ -425,6 +543,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 cameraProvider.unbindAll()
+
                 cameraProvider.bindToLifecycle(
                     this,
                     CameraSelector.DEFAULT_BACK_CAMERA,
